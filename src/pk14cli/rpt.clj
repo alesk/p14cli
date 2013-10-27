@@ -103,11 +103,11 @@
     (let [
           [a b] x
           ; tukaj pogledam, da ni slucajno za isto kodovec opisov
-          names (reduce (fn [s d] (conj s (get d "99"))) #{} b)  
+          names (reduce (fn [s d] (conj s (get d "99"))) #{} b)
           ; katere vrstce bo izpisat
           sample (take (get SHOW a 12) b)]
       (println (format "\n%s %s %s" a (count b) names))
-      (doseq [s sample]              
+      (doseq [s sample]
               (println (format "%s, %s, %s, %s, %s, %s, %s" (format-date (:ts s)) a (:pc s)(get s "41") (get s "42") (get s "11") (get s "4")))))))
 
 (defn proc-file [fname]
@@ -122,12 +122,8 @@
 (defn process-files [files]
   (let [
     ; prebere napake iz fajlov, tole je tocka kjer se da paralizirat
-    tm_start (System/currentTimeMillis)
     err (pmap proc-file files)
     ;posortira vse napaka gleda na timeptamp
-    res (reduce separate-by-err {} err)
-    tm_end (System/currentTimeMillis)
-    _ (println "Parse time (ms):" (- tm_end tm_start) tm_start tm_end)
 
     sorted (reduce (fn [m tuple]
                      (let [[k arr] tuple]
@@ -143,5 +139,5 @@
 (defn main []
   (println "root" root)
   (println "timestamp, rc, pc, tid, mid, transaction, amount")
-  (process-files files)
+  (time (process-files files))
   (shutdown-agents))
