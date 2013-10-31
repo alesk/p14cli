@@ -1,7 +1,7 @@
 (ns pk14cli.rpt
  (:require
-  [clj-time.core :refer date-time hours plus]
-  [clj-time.format :refer parse formatter]
+  [clj-time.core :refer [date-time hours plus]]
+  [clj-time.format :refer [parse formatter]]
   )
  (:import (java.util Date Calendar)
           (java.lang Integer)))
@@ -58,7 +58,7 @@
   "pogledamo, ce ima polje 39 razlicno od 00; kar pomeni napaka"
   (= -1 (.indexOf x fok)))
 
-(defn parse [ts-log_iso]
+(defn parse-log [ts-log_iso]
   "isomsg v dict"
   (let [
         [ts-log iso] ts-log_iso
@@ -75,9 +75,10 @@
   (let [
         time (parse (formatter "YYYY-MM-DD hh:mm:ss,SSS") (subs log-line 0 23))
         corrected-time (plus time (hours HOST_TIME_DIFF))
-        isomsg (or (re-find #"<isomsg>(.*)</isomsg>" c) ['',''])]
+        isomsg (or (re-find #"<isomsg>(.*)</isomsg>" log-line) ["",""])
+        ]
     {:time corrected-time :isomsg (second isomsg)}
-  )
+  ))
 
 (defn extract-errors [c]
   "prebere ven <isomsg>..</isomsg> samo ce imajo napako, zraven pobira se letnico iz log timestampa"
