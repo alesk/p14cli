@@ -1,4 +1,8 @@
 (ns pk14cli.rpt
+ (:require
+  [clj-time.core :refer [date-time hours plus]]
+  [clj-time.format :refer [parse formatter]]
+  )
  (:import (java.util Date Calendar)
           (java.lang Integer)))
 
@@ -36,7 +40,7 @@
         [_ & dat] (re-find #"(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)" f7-ts)
         year (.get ts-log Calendar/YEAR)
         dat2 (map #(java.lang.Integer/parseInt %) dat)
-        [mon1, day, hour, minutes, seconds] dat2]    
+        [mon1, day, hour, minutes, seconds] dat2]
     (calendar year mon1 day hour minutes seconds 0)))
 
 (def files
@@ -54,43 +58,31 @@
   "pogledamo, ce ima polje 39 razlicno od 00; kar pomeni napaka"
   (= -1 (.indexOf x fok)))
 
-(defn parse [ts-log_iso]
+(defn parse-log [ts-log_iso]
   "isomsg v dict"
   (let [
         [ts-log iso] ts-log_iso
         key-val (re-seq #"id=\"(\d+)\"\s+value=\"(.*?)\"" iso)
-        rec (reduce (fn [m tuple]
-                    (assoc m
-                       (nth tuple 1)
-                       (nth tuple 2)))
-                  {}
-                  key-val)
+        rec  (into {} key-val) ;; transforms [[key, val]] to  {key val}
         {f7-ts "7" f63-pcrec "63" } rec
         pc (if f63-pcrec (second(re-find #"PC0002(\d\d)" f63-pcrec)) "-1")
-        fin (-> rec
-            (assoc :ts-log ts-log)
-            (assoc :pc pc)
-            ;(assoc :ts ts-log))
-            (assoc :ts (if f7-ts
-                         (ts ts-log f7-ts)
-                         ts-log)))
+        fin (assoc rec :ts-log ts-log :pc pc :ts (if f7-ts (ts ts-log f7-ts) ts-log))
         ] fin ))
+
+(defn parse-log-line
+  ; 2013-10-21 12:16:02,397(kar ne kaj krame )parse:\n<isomsg>....</isomsg>
+  [log-line]
+  (let [
+        time (parse (formatter "YYYY-MM-DD hh:mm:ss,SSS") (subs log-line 0 23))
+        corrected-time (plus time (hours HOST_TIME_DIFF))
+        isomsg (or (re-find #"<isomsg>(.*)</isomsg>" log-line) ["",""])
+        ]
+    {:time corrected-time :isomsg (second isomsg)}
+  ))
 
 (defn extract-errors [c]
   "prebere ven <isomsg>..</isomsg> samo ce imajo napako, zraven pobira se letnico iz log timestampa"
-  ;(println fok)
-  (let [
-        ; 2013-10-21 12:16:02,397(kar ne kaj krame )parse:\n<isomsg>....</isomsg>
-        _msgs (re-seq #"(?s)((\d+)-(\d+)-(\d+)\s+(\d+):(\d+):(\d+))(?:[\p{Print}\x3f\p{Blank}]+parse:\s+)(<isomsg>.*?</isomsg>)" c)
-        msgs (map (fn [x]
-                    (let[dat (drop 2 (take 8 x))
-                         isomsg (nth x 8)
-                         dat2 (map #(java.lang.Integer/parseInt %) dat)
-                         [year mon1 day hour minutes seconds] dat2                         
-                         cal (calendar year mon1 day (+ hour HOST_TIME_DIFF) minutes seconds 0)]                      
-                      (list cal isomsg))) _msgs)
-        err (filter #(notok (second %)) msgs)
-        ]  err))
+   (filter #(notok (% :isomsg)) (map parse-log-line c)))
 
 (defn separate-by-err [res, err]
   (reduce (fn [m dict]
@@ -112,11 +104,11 @@
     (let [
           [a b] x
           ; tukaj pogledam, da ni slucajno za isto kodovec opisov
-          names (reduce (fn [s d] (conj s (get d "99"))) #{} b)  
+          names (reduce (fn [s d] (conj s (get d "99"))) #{} b)
           ; katere vrstce bo izpisat
           sample (take (get SHOW a 12) b)]
       (println (format "\n%s %s %s" a (count b) names))
-      (doseq [s sample]              
+      (doseq [s sample]
               (println (format "%s, %s, %s, %s, %s, %s, %s" (format-date (:ts s)) a (:pc s)(get s "41") (get s "42") (get s "11") (get s "4")))))))
 
 (defn proc-file [fname]
@@ -131,12 +123,8 @@
 (defn process-files [files]
   (let [
     ; prebere napake iz fajlov, tole je tocka kjer se da paralizirat
-    tm_start (System/currentTimeMillis)
     err (pmap proc-file files)
     ;posortira vse napaka gleda na timeptamp
-    res (reduce separate-by-err {} err)
-    tm_end (System/currentTimeMillis)
-    _ (println "Parse time (ms):" (- tm_end tm_start) tm_start tm_end)
 
     sorted (reduce (fn [m tuple]
                      (let [[k arr] tuple]
@@ -152,5 +140,5 @@
 (defn main []
   (println "root" root)
   (println "timestamp, rc, pc, tid, mid, transaction, amount")
-  (process-files files)
+  (time (process-files files))
   (shutdown-agents))
