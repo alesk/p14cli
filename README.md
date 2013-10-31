@@ -1,6 +1,6 @@
 # pk14cli
 
-A Clojure library designed to ... well, that part is up to you.
+An effort to make an clojure idiomatic log parser.
 
 ## Usage
 
@@ -8,7 +8,6 @@ FIXME
 
 ## License
 
-Copyright © 2013 FIXME
+Copyright © 2013 Nobody
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the [WTFPL](http://en.wikipedia.org/wiki/WTFPL) (Do What the Fuck You Want to Public License).
