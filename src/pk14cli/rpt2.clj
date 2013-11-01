@@ -38,6 +38,7 @@
   (let [chunk-size (int (ceil (/ (count col) number-of-chunks)))]
     (partition-all (max chunk-size 1)  col)))
 
+
 ;; fast check if content of isomsg has error_code = 0
 (defn error-entry? [content] (not (has? content "id=\"39\" value=\"00\"")))
 
@@ -88,8 +89,12 @@
 (defn profile-with [fn]
   (time
    (let [files (filter #(.isFile %) (file-seq (io/file "resources")))
-         results (sort-by :server-timestamp (fn (take 7 files) 1))]
+         results (sort-by :server-timestamp (fn files 1))]
    (println "Errors extracted: " (count results)))))
 
-(profile-with process-files)
-(profile-with process-files-in-parallel)
+;; (profile-with process-files)
+;; (profile-with process-files-in-parallel)
+
+(defn -main []
+  (profile-with process-files-in-parallel)
+)
