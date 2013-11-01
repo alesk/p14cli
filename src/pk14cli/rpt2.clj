@@ -56,19 +56,85 @@
     ))
 
 
-(defn process-files [ file-names server-time-diff]
-  (sort-by :server-timestamp
+
+(defn process-files
+  "Extracts errors from log files sequentially."
+  [ file-names server-time-diff]
            (reduce (fn [acc file-name]
                      (println "Processing: " (.toString file-name))
                      (into acc (extract-errors (slurp file-name) server-time-diff)))
-                   [] file-names)))
-
-;;(def a (slurp "/Users/ales/prj/jj/pk14cli/resources/a.log"))
-;;(extract-errors a 1)
+                   [] file-names))
 
 
-(time (def x (process-files (filter #(.isFile %) (file-seq (io/file "resources")))  1)))
-(count x)
-(nth x 10)
-x
+(defn pprocess-files
+  "Extract erros from log files in parallel."
+  [ file-names server-time-diff]
+  (let [chunks (partition-all 1 (map #(.toString %) file-names))
+        process-log (fn [file]
+                       (println file)
+                       (read-log-file file server-time-diff)
+                      )
+        ]
+       (pmap process-log  (map #(.toString %) file-names))
+    ))
 
+
+
+
+;;
+(defn profile-with [fn]
+  (time
+   (let [files (filter #(.isFile %) (file-seq (io/file "resources")))
+         results (sort-by :server-timestamp (fn (take 7 files) 1))]
+   (println "Errors extracted: " (count results)))))
+
+(profile-with process-files)
+(profile-with pprocess-files)
+
+(defn process-files2 [file-names server-time-diff]
+  (flatten (pmap
+     (fn [files]
+       (process-files files server-time-diff))
+     (partition-all 2 file-names)
+  )))
+
+(profile-with process-files2)
+
+
+
+(defn read-log-file [file-name server-time-diff]
+  (with-open [rdr (clojure.java.io/reader file-name)]
+    (:pairs
+     (persistent!
+      (reduce
+       (fn [acc line]
+         (cond
+          (has? line "<isomsg>")  (assoc! acc
+                                          :state :read-isomsg
+                                          :last-isomsg (transient []))
+
+          (has? line "</isomsg>")
+          (let [isomsg (apply str (persistent! (acc :last-isomsg)))]
+            (if (error-entry? isomsg)
+              (assoc! acc
+                      :state :read-log
+                      :pairs (conj (acc :pairs)
+                                   (into
+                                    (parse-error-xml isomsg)
+                                    {:server-time-diff (plus (parse-timestamp (subs (acc :last-log) 0 23)) server-time-diff)}
+                                   )))
+              (assoc! acc :state :read-log)
+              ))
+          :else
+          (if (= (acc :state) :read-isomsg)
+            (assoc!  acc :last-isomsg (conj! (acc :last-isomsg) line))
+            (assoc!  acc :last-log line))
+          ))
+
+       (transient {:state :read-log :last-log nil :last-isomsg nil :pairs []})
+       (line-seq rdr))))))
+
+
+
+
+(time (read-log-file "temp-logs/log4j_pk14_prod.log.5" (hours 1)))
