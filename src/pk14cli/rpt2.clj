@@ -1,5 +1,6 @@
 (ns pk14cli.rpt2
  (:require
+  [clojure.java.io :as io]
   [clj-time.core :refer [date-time hours plus]]
   [clj-time.format :refer [parse formatter]]
   ))
@@ -49,12 +50,25 @@
      (fn [[timestamp xml-content]]
        (assoc
          (parse-error-xml xml-content)
-         :server-timestamp plus (parse-timestamp timestamp) (hours host-time-diff))
-       )
+         :server-timestamp (plus (parse-timestamp timestamp) (hours host-time-diff))
+       ))
      pairs-with-errors)
     ))
 
 
+(defn process-files [ file-names server-time-diff]
+  (sort-by :server-timestamp
+           (reduce (fn [acc file-name]
+                     (println "Processing: " (.toString file-name))
+                     (into acc (extract-errors (slurp file-name) server-time-diff)))
+                   [] file-names)))
 
-(def a (slurp "/Users/ales/prj/jj/pk14cli/resources/a.log"))
-(extract-errors a 1)
+;;(def a (slurp "/Users/ales/prj/jj/pk14cli/resources/a.log"))
+;;(extract-errors a 1)
+
+
+(time (def x (process-files (filter #(.isFile %) (file-seq (io/file "resources")))  1)))
+(count x)
+(nth x 10)
+x
+
