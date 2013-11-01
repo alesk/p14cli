@@ -3,6 +3,7 @@
   [clojure.java.io :as io]
   [clj-time.core :refer [date-time hours plus]]
   [clj-time.format :refer [parse formatter]]
+  [clojure.math.numeric-tower :refer [ceil]]
   ))
 
 ;; mapping from field id to field name
@@ -27,6 +28,15 @@
 ;; must use H for hour (0-23) not h (0-11)
 (defn parse-timestamp [timestamp]  (parse (formatter "YYYY-MM-DD HH:mm:ss,SSS") timestamp))
 
+;; Predicate that tests existance of `pattern`in `string`.
+(defn has? [string pattern] (not (neg? (.indexOf string pattern))))
+
+(defn partition-to
+  "Paritions cols to `number-of-chunks`"
+  [number-of-chunks col]
+  (let [chunk-size (int (ceil (/ (count col)) number-of-chunks))]
+    (partition-all (max chunk-size 1)  col)))
+
 ;; fast check if content of isomsg has error_code = 0
 (defn error-entry? [content] (has? content "id=\"39\" value=\"00\""))
 
@@ -39,7 +49,6 @@
   (into {} (map (fn [[id val]] [(get fields id (keyword id)) val])
                 (field-seq xml-content))))
 
-(defn has? [string pattern] (not (neg? (.indexOf string pattern))))
 
 ;; extract errorneous log entries, converts isomsg to {}
 ;; and adds server-timestamp corrected for host-time-diff
@@ -53,11 +62,9 @@
        (assoc
          (parse-error-xml xml-content)
          :server-timestamp (plus (parse-timestamp timestamp) (hours host-time-diff))
-       ))
+         ))
      pairs-with-errors)
     ))
-
-
 
 (defn process-files
   "Extracts errors from log files sequentially."
@@ -67,17 +74,14 @@
                      (into acc (extract-errors (slurp file-name) server-time-diff)))
                    [] file-names)))
 
-
 (defn process-files-in-parallel
   ([file-names server-time-diff ] (process-files-in-parallel file-names server-time-diff 2))
   ([file-names server-time-diff concurent-threads]
   (flatten (pmap
      (fn [files]
        (process-files files server-time-diff))
-     (partition-all
-        (int (/ (count file-names) concurent-threads))
-        file-names)
-  ))))
+     (partition-to concurent-threads file-names))
+  )))
 
 ;; profiling
 (defn profile-with [fn]
@@ -88,5 +92,3 @@
 
 (profile-with process-files)
 (profile-with process-files-in-parallel)
-
-
