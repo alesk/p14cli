@@ -1,10 +1,10 @@
 (ns pk14cli.rpt2
- (:require
-  [clojure.java.io :as io]
-  [clj-time.core :refer [date-time hours plus]]
-  [clj-time.format :refer [parse formatter]]
-  [clojure.math.numeric-tower :refer [ceil]]
-  ))
+  (:require
+    [clojure.java.io :as io]
+    [clj-time.core :refer [date-time hours plus]]
+    [clj-time.format :refer [parse formatter]]
+    [clojure.math.numeric-tower :refer [ceil]]
+    ))
 
 ;; mapping from field id to field name
 (def fields {
@@ -17,7 +17,6 @@
              "39" :error_code
              "63" :tlv
              })
-
 
 ;; regex to extract pattern
 ;;
@@ -60,18 +59,16 @@
         pairs-with-errors (filter error-entry? pairs)
         ]
     (map
-     (fn [[timestamp xml-content]]
-       (assoc
-         (parse-error-xml xml-content)
-         :server-timestamp (plus (parse-timestamp timestamp) (hours host-time-diff))
-         ))
-     pairs-with-errors)
-    ))
+      (fn [[timestamp xml-content]]
+        (assoc
+          (parse-error-xml xml-content)
+          :server-timestamp (plus (parse-timestamp timestamp) (hours host-time-diff))))
+      pairs-with-errors)))
 
 (defn process-files
   "Extracts errors from log files sequentially."
-  [ file-names server-time-diff]
-           (flatten(reduce (fn [acc file-name]
+  [ file-names server-time-diff ]
+  (flatten (reduce (fn [acc file-name]
                      (println "Processing: " (.toString file-name))
                      (into acc (extract-errors (slurp file-name) server-time-diff)))
                    [] file-names)))
@@ -79,22 +76,20 @@
 (defn process-files-in-parallel
   ([file-names server-time-diff ] (process-files-in-parallel file-names server-time-diff 2))
   ([file-names server-time-diff concurent-threads]
-  (flatten (pmap
-     (fn [files]
-       (process-files files server-time-diff))
-     (partition-to concurent-threads file-names))
-  )))
+   (flatten (pmap
+              (fn [files]
+                (process-files files server-time-diff))
+              (partition-to concurent-threads file-names)))))
 
 ;; profiling
 (defn profile-with [fn]
   (time
-   (let [files (filter #(.isFile %) (file-seq (io/file "resources")))
-         results (sort-by :server-timestamp (fn files 1))]
-   (println "Errors extracted: " (count results)))))
+    (let [files (filter #(.isFile %) (file-seq (io/file "resources")))
+          results (sort-by :server-timestamp (fn files 1))]
+      (println "Errors extracted: " (count results)))))
 
 ;; (profile-with process-files)
 ;; (profile-with process-files-in-parallel)
 
 (defn -main []
-  (profile-with process-files-in-parallel)
-)
+  (profile-with process-files-in-parallel))
