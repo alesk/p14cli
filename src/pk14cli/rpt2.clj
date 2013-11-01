@@ -18,11 +18,12 @@
              "63" :tlv
              })
 
+
 ;; regex to extract pattern
 ;;
 ;; 2013-10-21 12:16:02,397(kar ne kaj krame )parse:\n<isomsg>....</isomsg>
 ;;
-(def error-entry-regex #"(?s)(\d{4}-.{17})[^\n]+?\n+<isomsg>\s*(.*?)\s*</isomsg>" )
+(def error-entry-regex #"(?s)(\d{4}-.{17})[^\n]+?\n+<isomsg>\s*(.*?)\s*</isomsg>")
 
 ;; parses timestamp of form YYYY-MM-DD hh:mm:ss,SSS"
 ;; must use H for hour (0-23) not h (0-11)
@@ -34,11 +35,11 @@
 (defn partition-to
   "Paritions cols to `number-of-chunks`"
   [number-of-chunks col]
-  (let [chunk-size (int (ceil (/ (count col)) number-of-chunks))]
+  (let [chunk-size (int (ceil (/ (count col) number-of-chunks)))]
     (partition-all (max chunk-size 1)  col)))
 
 ;; fast check if content of isomsg has error_code = 0
-(defn error-entry? [content] (has? content "id=\"39\" value=\"00\""))
+(defn error-entry? [content] (not (has? content "id=\"39\" value=\"00\"")))
 
 ;; extract fields from isomsg
 (defn field-seq [xml-content]
