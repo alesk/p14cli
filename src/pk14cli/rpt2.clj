@@ -28,7 +28,7 @@
 (defn parse-timestamp [timestamp]  (parse (formatter "YYYY-MM-DD HH:mm:ss,SSS") timestamp))
 
 ;; fast check if content of isomsg has error_code = 0
-(defn error-entry? [content] (neg? (.indexOf content "id=\"39\" value=\"00\"")))
+(defn error-entry? [content] (has? content "id=\"39\" value=\"00\""))
 
 ;; extract fields from isomsg
 (defn field-seq [xml-content]
@@ -38,6 +38,8 @@
 (defn parse-error-xml [xml-content]
   (into {} (map (fn [[id val]] [(get fields id (keyword id)) val])
                 (field-seq xml-content))))
+
+(defn has? [string pattern] (not (neg? (.indexOf string pattern))))
 
 ;; extract errorneous log entries, converts isomsg to {}
 ;; and adds server-timestamp corrected for host-time-diff
@@ -60,28 +62,24 @@
 (defn process-files
   "Extracts errors from log files sequentially."
   [ file-names server-time-diff]
-           (reduce (fn [acc file-name]
+           (flatten(reduce (fn [acc file-name]
                      (println "Processing: " (.toString file-name))
                      (into acc (extract-errors (slurp file-name) server-time-diff)))
-                   [] file-names))
+                   [] file-names)))
 
 
-(defn pprocess-files
-  "Extract erros from log files in parallel."
-  [ file-names server-time-diff]
-  (let [chunks (partition-all 1 (map #(.toString %) file-names))
-        process-log (fn [file]
-                       (println file)
-                       (read-log-file file server-time-diff)
-                      )
-        ]
-       (pmap process-log  (map #(.toString %) file-names))
-    ))
+(defn process-files-in-parallel
+  ([file-names server-time-diff ] (process-files-in-parallel file-names server-time-diff 2))
+  ([file-names server-time-diff concurent-threads]
+  (flatten (pmap
+     (fn [files]
+       (process-files files server-time-diff))
+     (partition-all
+        (int (/ (count file-names) concurent-threads))
+        file-names)
+  ))))
 
-
-
-
-;;
+;; profiling
 (defn profile-with [fn]
   (time
    (let [files (filter #(.isFile %) (file-seq (io/file "resources")))
@@ -89,52 +87,6 @@
    (println "Errors extracted: " (count results)))))
 
 (profile-with process-files)
-(profile-with pprocess-files)
-
-(defn process-files2 [file-names server-time-diff]
-  (flatten (pmap
-     (fn [files]
-       (process-files files server-time-diff))
-     (partition-all 2 file-names)
-  )))
-
-(profile-with process-files2)
+(profile-with process-files-in-parallel)
 
 
-
-(defn read-log-file [file-name server-time-diff]
-  (with-open [rdr (clojure.java.io/reader file-name)]
-    (:pairs
-     (persistent!
-      (reduce
-       (fn [acc line]
-         (cond
-          (has? line "<isomsg>")  (assoc! acc
-                                          :state :read-isomsg
-                                          :last-isomsg (transient []))
-
-          (has? line "</isomsg>")
-          (let [isomsg (apply str (persistent! (acc :last-isomsg)))]
-            (if (error-entry? isomsg)
-              (assoc! acc
-                      :state :read-log
-                      :pairs (conj (acc :pairs)
-                                   (into
-                                    (parse-error-xml isomsg)
-                                    {:server-time-diff (plus (parse-timestamp (subs (acc :last-log) 0 23)) server-time-diff)}
-                                   )))
-              (assoc! acc :state :read-log)
-              ))
-          :else
-          (if (= (acc :state) :read-isomsg)
-            (assoc!  acc :last-isomsg (conj! (acc :last-isomsg) line))
-            (assoc!  acc :last-log line))
-          ))
-
-       (transient {:state :read-log :last-log nil :last-isomsg nil :pairs []})
-       (line-seq rdr))))))
-
-
-
-
-(time (read-log-file "temp-logs/log4j_pk14_prod.log.5" (hours 1)))
