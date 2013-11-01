@@ -23,10 +23,11 @@
 (def error-entry-regex #"(?s)(\d{4}-.{17})[^\n]+?\n+<isomsg>\s*(.*?)\s*</isomsg>" )
 
 ;; parses timestamp of form YYYY-MM-DD hh:mm:ss,SSS"
-(defn parse-timestamp [timestamp] (parse (formatter "YYYY-MM-DD hh:mm:ss,SSS") timestamp))
+;; must use H for hour (0-23) not h (0-11)
+(defn parse-timestamp [timestamp]  (parse (formatter "YYYY-MM-DD HH:mm:ss,SSS") timestamp))
 
 ;; fast check if content of isomsg has error_code = 0
-(defn error-entry? [content] (neg? (.indexOf content "<field id=\"39\" value=\"00\"/>")))
+(defn error-entry? [content] (neg? (.indexOf content "id=\"39\" value=\"00\"")))
 
 ;; extract fields from isomsg
 (defn field-seq [xml-content]
